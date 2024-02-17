@@ -158,11 +158,15 @@ Data %>% levene_test(Size_zscore ~ Family_text)
 
 #test for significance ----
 
-model <- lm(Size ~ Treatment * Family_text,
+Data$Family_Number <- as.character(Data$Family_Number)
+
+model <- lm(Size ~ Treatment * Family_Number,
            data = Data
 )
 
 Anova(model)
+
+summary(model)
 
 #results
 
@@ -185,7 +189,7 @@ Treatment              18202    1 1871.774 < 2.2e-16 ***
 #Post-Hoc text - pairwise with p-adjustment ----
 
 #pairwise wont test differences between families - too many families so giving NA 
-pairwise <- pairwise.t.test(Data$Size, Data$Family_text,
+pairwise <- pairwise.t.test(Data$Size, Data$Family_Number,
                 p.adjust.method = "BH"
 )
 
@@ -398,27 +402,27 @@ p2
 #Also should remove families that did not fertilize well in SW
 
 
-#Below, Grouping families based on R, MR, or S to use for size visuals based on avg family size
+#Below, Grouping families based on R, MR, or S to use for size visuals based on avg family size in OA seawater
 
 
-#first average SW and DW sizes for all families
+#first average DW sizes for all families
 
-avg_data <- Data %>%
-  group_by(Family_text, Treatment) %>%
+avg_data_DW <- Data %>%
+  filter(Treatment == "DW") %>%
+  group_by(Family_text) %>%
   summarise(
     Avg_Size = mean(Size),
     SD_Size = sd(Size),
     .groups = 'drop'
   )
 
-avg_data_classified <- avg_data %>%
+
+avg_data_classified_DW <- avg_data_DW %>%
   mutate(Size_Category = case_when(
     Avg_Size > 74 ~ "R",
-    between(Avg_Size, 70, 73.99) ~ "MR",
+    Avg_Size >= 70 & Avg_Size <= 73.99 ~ "MR",
     TRUE ~ "S"
   ))
-
-avg_data_classified_DW <- filter(avg_data_classified, Treatment == "DW")
 
 
 ggplot(data = avg_data_classified_DW, aes(x = factor(Size_Category, levels = c("R", "MR", "S")), y = Avg_Size, fill = Size_Category)) + 
@@ -437,12 +441,14 @@ result_R <- avg_data_classified_DW %>%
   filter(Size_Category == "R") %>%
   dplyr::select(Family_text) %>%
   distinct()
+View(result_R)
 
 #MR
 result_MR <- avg_data_classified_DW %>%
   filter(Size_Category == "MR") %>%
   dplyr::select(Family_text) %>%
   distinct()
+View(result_MR)
 
 #S
 result_S <- avg_data_classified_DW %>%
@@ -450,3 +456,91 @@ result_S <- avg_data_classified_DW %>%
   dplyr::select(Family_text) %>%
   distinct()
 View(result_S)
+
+
+
+#Combine this infor with Data object (i.e., denote families as R, MR, or S)
+
+Data <- Data %>%
+  mutate(Size_Category = case_when(
+    Family_text %in% result_R$Family_text ~ "R",
+    Family_text %in% result_MR$Family_text ~ "MR",
+    Family_text %in% result_S$Family_text ~ "S",
+    TRUE ~ "Unknown"
+  ))
+
+View(Data)
+
+
+
+avg_data_DW <- Data %>%
+  filter(Treatment == "DW") %>%
+  group_by(Family_text) %>%
+  summarise(
+    Avg_Size = mean(Size),
+    SD_Size = sd(Size),
+    .groups = 'drop'
+  )
+
+
+ggplot(data = Data, aes(x = Size, fill = Size_Category)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Size by Size Category", x = "Size", y = "Density") +
+  theme_minimal()
+
+
+plot1 <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size, fill = Size_Category)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "DW Treatment", x = "Size", y = "Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlim(55, 90)
+
+#to add blue border to denote treatment
+
+plot1 <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size, fill = Size_Category)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "", x = "Size", y = "Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlim(55, 90) +
+  theme(panel.border = element_rect(color = "red", fill = NA, linewidth = 3)) +
+  guides(fill=FALSE)
+
+
+plot2 <- ggplot(data = subset(Data, Treatment == "SW"), aes(x = Size, fill = Size_Category)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "SW Treatment", x = "Size", y = "Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlim(55, 90)
+
+#Add border colour to denote treatment
+
+plot2 <- ggplot(data = subset(Data, Treatment == "SW"), aes(x = Size, fill = Size_Category)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "", x = "Size", y = "Density") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  xlim(55, 90) +
+  theme(panel.border = element_rect(color = "blue", fill = NA, linewidth = 3))
+
+combined_plots <- grid.arrange(plot2, plot1, ncol = 1)
+
+#add dotted line indicating peak size - code not working below 
+
+p <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size, fill = Size_Category)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "DW Treatment", x = "Size", y = "Density") +
+  theme_minimal()
+
+# Calculate peak points for each Size_category
+peaks <- Data %>%
+  filter(Treatment == "DW") %>%
+  group_by(Size_Category) %>%
+  summarise(peak_density = density(Size)$x[which.max(density(Size)$y)], .groups = "drop")
+
+# Add annotated peak lines to the plot
+p + annotate("segment", x = peaks$Size_category, xend = peaks$Size_category, y = 0, yend = peaks$density, linetype = "dotted")
+
+
