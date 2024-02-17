@@ -528,21 +528,83 @@ combined_plots <- grid.arrange(plot2, plot1, ncol = 1)
 p <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size, fill = Size_Category)) +
   geom_density(alpha = 0.5) +
   labs(title = "DW Treatment", x = "Size", y = "Density") +
-  theme_minimal()
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
 
 # Calculate peak points for each Size_category
+# Remove missing values and then calculate the peak density
 peaks <- Data %>%
-  filter(Treatment == "DW") %>%
+  filter(!is.na(Size), Treatment == "DW") %>%
   group_by(Size_Category) %>%
   summarise(peak_density = density(Size)$x[which.max(density(Size)$y)], .groups = "drop")
 
+#peaks: MR=73.1, R=76.1, and S=69.9
+
+
 # Add annotated peak lines to the plot
-p + annotate("segment", x = peaks$Size_category, xend = peaks$Size_category, y = 0, yend = peaks$density, linetype = "dotted")
+p + geom_vline(xintercept = c(73.1, 76.1, 69.9), linetype = "dotted")
 
 
+#OA selection event----
+#With Ally's size data, mimic an OA selection event
+#Will need to do more analysis to determine surviving size in OA (using scoring and Sizes) but for now, lets say 
+#Larvae smaller than 73um will not survive (filter out)
+#And look at new density plot
+
+filtered_data <- Data %>%
+  
+  filter(Size > 73)
+
+# Create a density plot for the filtered data
+plot_filtered <- ggplot(data = subset(filtered_data, Treatment =="DW"), aes(x = Size)) +
+  geom_density(fill = "red", alpha = 0.5) +
+  labs(title = "Density Plot of Sizes < 75", x = "Size", y = "Density") +
+  theme_minimal() +
+  xlim(50, 90)
+
+plot_filtered
+
+plot <- ggplot(data = subset(Data, Treatment =="DW"), aes(x = Size)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  labs(title = "Density Plot of Sizes < 75", x = "Size", y = "Density") +
+  theme_minimal() +
+  xlim(50, 90)
 
 
+# Create a single overlay plot
 
+combined_data <- rbind(subset(Data, Treatment == "DW" & Size < 75), subset(Data, Treatment == "DW"))
+
+overlay_plot <- ggplot(combined_data, aes(x = Size, fill = Treatment, color = as.factor(Size < 75))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Density Plot of Sizes < 75 Overlayed", x = "Size", y = "Density") +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red")) +
+  scale_fill_manual(values = c("red", "red")) +
+  xlim(50, 90)
+
+overlay_plot
+
+plot <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size, fill = cut(Size, c(-Inf, 73, Inf)))) +
+  +     geom_density(alpha = 0.5) +
+  +     labs(title = "Density Plot with Size < 75 Colored Red", x = "Size", y = "Density") +
+  +     theme_minimal() +
+  +     scale_fill_manual(values = c("blue", "red")) +
+  +     xlim(50, 90)
+> 
+  > plot
+
+
+#make a dotted line at 73um (geom_vline fxn)
+
+plot <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size)) +
+  +     geom_density(fill = "blue", alpha = 0.5) +
+  +     labs(title = "Density Plot with Dotted Line at x = 73", x = "Size", y = "Density") +
+  +     theme_minimal() +
+  +     geom_vline(xintercept = 73, linetype = "dotted") +
+  +     xlim(50, 90)
+
+ plot
 
 
 
