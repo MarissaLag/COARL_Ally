@@ -483,11 +483,7 @@ avg_data_DW <- Data %>%
   )
 
 
-ggplot(data = Data, aes(x = Size, fill = Size_Category)) +
-  geom_density(alpha = 0.5) +
-  labs(title = "Density Plot of Size by Size Category", x = "Size", y = "Density") +
-  theme_minimal()
-
+#Size category density plots ----
 
 plot1 <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size, fill = Size_Category)) +
   geom_density(alpha = 0.5) +
@@ -542,5 +538,11 @@ peaks <- Data %>%
 
 # Add annotated peak lines to the plot
 p + annotate("segment", x = peaks$Size_category, xend = peaks$Size_category, y = 0, yend = peaks$density, linetype = "dotted")
+
+
+
+
+
+
 
 
