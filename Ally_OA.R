@@ -7,13 +7,27 @@ install.packages("datarium")
 install.packages("rstatix")
 install.packages("ggpubr")
 install.packages("tidyverse")
+install.packages("ggResidpanel")
+install.packages("DHARMa")
+install.packages("lme4")
+install.packages("fitdistrplus")
 
 library("datarium")
 library(tidyverse)
 library(ggpubr)
 library(rstatix)
+library(ggResidpanel)
+library(DHARMa)
+library(lme4)
+library(fitdistrplus)
+library(ggplot2)
+library(hrbrthemes)
+library(dplyr)
+library(tidyr)
+library(viridis)
 
 Data = X60_fert_Phenotype_Data_CSV
+#Data = Sizes_nomissing #tested with no missing values - made no difference in normality checks
 
 #Assumptions test ----
 #source: https://www.datanovia.com/en/lessons/anova-in-r/#assumptions
@@ -22,7 +36,7 @@ ggboxplot(Data, x = "Family_Number", y = "Size")
 
 #check for outliers ----
 outliers <- Data %>% 
-  group_by(Family_Number) %>%
+  group_by(Family_text) %>%
   identify_outliers(Size)
 
 View(outliers)
@@ -38,18 +52,49 @@ print(size_values)
 
 #check for distribution
 
+#look at histogram of data dist
+hist(Data$Size)
+
+#As expected, size data looks normal but with right-skewdness
+
 # Build the linear model
-model  <- lm(Size ~ Family_Number, data = Data)
+model  <- lm(Size ~ Family_text + Treatment, data = Data)
 # Create a QQ plot of residuals
 ggqqplot(residuals(model))
 
-#check All the points fall approximately along the reference line, for each cell.
-#looks like there are outliers resulting in non-normal dist - try square rooting dependent variable (sizes)
+#another way to look at residuals distribution
+
+resid_panel(model)
+
+#Can compare residuals plot when using a glm instead of a lm - let's go with a gamma dist'd (for right skewdness)
+model_gamma <- glm(Size ~ Family_text + Treatment, data = Data, family = Gamma(link = "log"))
+# Create a QQ plot of residuals
+resid_panel(model_gamma)
+
+#Try DHARMa package ----
+#normal dist
+model_2 <- glm(Size ~ Family_text + Treatment, data = Data, family = Gamma(link="log"))
+resids <- simulateResiduals(model_2)
+plot(resids)
+#DHARMa package is giving odd results...
+
+#gamma dist
+model_2 <- glm(Size ~ Family_text + Treatment, data = Data, family = Gamma(link = "log"))
+resids <- simulateResiduals(model_2)
+plot(resids)
+
+model_2 <- glm(Size ~ Family_text + Treatment, data = Data, family = poisson(link = "log"))
+resids <- simulateResiduals(model_2)
+plot(resids)
+
+
+#Can also try data transformations
+#try square rooting dependent variable (sizes)
 
 Data$Size <- sqrt(Data$Size)
 View(Data)
-model  <- lm(Size ~ Family_Number, data = Data)
-ggqqplot(residuals(model))
+model_sqrt  <- lm(Size ~ Family_text + Treatment, data = Data)
+resid_panel(model_sqrt)
 
 #square-root did not help - try log
 Data$Size <- log(Data$Size)
@@ -57,14 +102,11 @@ View(Data)
 model  <- lm(Size ~ Family_Number, data = Data)
 ggqqplot(residuals(model))
 
-#Still did not help... May not be normally dist'd?
-
 # Compute Shapiro-Wilk test of normality
 #Note that, if your sample size is greater than 50, the normal QQ plot is preferred because at larger sample sizes the Shapiro-Wilk test becomes very sensitive even to a minor deviation from normality.
 shapiro_test(residuals(model))
 
-#if larger sample size:
-ggqqplot(Data, "Size", facet.by = "Treatment")
+
 
 #get means of groups ----
 Data %>% sample_n_by(Treatment, size = 2)
@@ -107,18 +149,14 @@ ggqqplot(residuals(model))
 plot(model, 1)
 
 #no evident relationships between residuals and fitted values (the mean of each groups), which is good. So, we can assume the homogeneity of variances.
-#Can also use levene's test to test for homo variance
+#Can also use levene's test to test for homo variance when sample sizes are smaller (so not here)
 
 Data %>% levene_test(Size_zscore ~ Family_text)
 
-#Very signficance, which indicates reject null hypothesis of homo variance - likely due to large sample size.
-#May be able to ignore as residuals plot looks okay
+#Summary- assuming data passes all assumptions for ANOVA (see residual plot, ignoring DHARMa results)
+#Run ANOVA ----
 
 #test for significance ----
-
-#perform three-way ANOVA
-model <- aov(Size ~ Treatment * Family_text, data=Data)
-model
 
 model <- lm(Size ~ Treatment * Family_text,
            data = Data
@@ -142,29 +180,273 @@ Treatment              18202    1 1871.774 < 2.2e-16 ***
 ---
   Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
-#Post-Hoc text - pairwise with p-adjustment
 
-pairwise.t.test(Data$Size, Data$Treatment,
-                p.adjust.method = "BH"
-)
 
-#pairwise wont test differences between families - too many families
+#Post-Hoc text - pairwise with p-adjustment ----
+
+#pairwise wont test differences between families - too many families so giving NA 
 pairwise <- pairwise.t.test(Data$Size, Data$Family_text,
                 p.adjust.method = "BH"
 )
 
 View(pairwise)
 
-mod <- aov(Size ~ Treatment,
-           data = Data
-)
+#summary: Need different method for post-hoc test for families -may need to group families into resilient or susceptible categories beforehand
 
-TukeyHSD(mod,
-         which = "Family_text"
-)
+#size plots ----
 
-par(mar = c(4.1, 13.5, 4.1, 2.1))
+Data$Family_Number <- as.character(Data$Family_Number)
 
-# create confidence interval for each comparison
+#NOTCH = If FALSE (default) make a standard box plot. If TRUE, make a notched box plot. Notches are used to compare groups; if the notches of two boxes do not overlap, this suggests that the medians are significantly different.
 
-ggplot(Data, aes(Family_text, Size, colour = Treatment)) + geom_boxplot()+ scale_color_manual(values = c("black","grey")) + theme_bw() + ylab("Number of mites")
+ggplot(Data, aes(x = Family_Number, y = Size, color = Treatment)) + 
+  geom_boxplot(outlier.color = "grey", notch = TRUE) +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_bw() +
+  ylab("Size (microns)") +
+  xlab("Family") + 
+  theme(axis.text.x = element_text(size = 8)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+#remove families with no values
+
+filtered_data <- Data %>%
+  filter(!(Family_Number %in% c("133", "134", "135", "136", "137", "138")))
+
+
+ggplot(filtered_data, aes(x = Family_Number, y = Size, color = Treatment)) + 
+  geom_boxplot(outlier.color = "grey", notch = TRUE) +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 8)) +
+  ylab("Size (microns)") +
+  xlab("Family") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+#x-axis orders not correct
+
+family_levels <- unique(Data$Family_Number)
+
+#order as appears on data sheet (don't follow base R rules)
+Data$Family_Number <- factor(Data$Family_Number, levels = family_levels)
+
+filtered_data <- Data %>%
+  filter(!(Family_Number %in% c("89", "90", "133", "134", "135", "136", "137", "138")))
+
+
+ggplot(filtered_data, aes(x = Family_Number, y = Size, color = Treatment)) + 
+  geom_boxplot(outlier.color = "grey", notch = TRUE) +
+  scale_color_manual(values = c("red", "blue")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(size = 8)) +
+  ylab("Size (microns)") +
+  xlab("Family") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+
+
+#Look at average size of each family in each treatment
+
+avg_data <- Data %>%
+  group_by(Family_Number, Treatment) %>%
+  summarise(
+    Avg_Size = mean(Size),
+    SD_Size = sd(Size),
+    .groups = 'drop'
+  )
+
+View(avg_data)
+
+#order families with largest-smallest size within DW treatment
+ordered_avg_data_DW <- avg_data %>%
+  filter(Treatment == "DW") %>%
+  arrange(desc(Avg_Size))
+
+View(ordered_avg_data_DW)
+
+top_ten_largest <- ordered_avg_data_DW %>%
+  slice(1:10)
+
+top_ten_smallest <- ordered_avg_data_DW %>%
+  slice(n() - 9:n())
+
+#Top ten largest families in DW = 71, 1, 94, 45, 73, 140, 95, 199, 51, 122 (in order)
+#Smallest 10 families in DW = 7, 6, 16, 4, 36, 102, 10, 31, 110, 9, 11 (in order from largest - smallest)
+
+#order families with largest-smallest size within SW treatment
+ordered_avg_data_SW <- avg_data %>%
+  filter(Treatment == "SW") %>%
+  arrange(desc(Avg_Size))
+View(ordered_avg_data_SW)
+
+top_ten_largest <- ordered_avg_data_SW %>%
+  slice(1:10)
+
+top_ten_smallest <- ordered_avg_data_SW %>%
+  slice(n() - 9:n())
+
+#Try plotting from largest to smallest in DW
+
+# Ensure that the "Family_text" column is a factor with the levels set based on "Avg_Size"
+
+avg_data <- Data %>%
+  group_by(Family_Number, Treatment) %>%
+  summarise(
+    Avg_Size = mean(Size),
+    SD_Size = sd(Size),
+    .groups = 'drop'
+  )
+
+ordered_avg_data_DW <- avg_data %>%
+  filter(Treatment == "DW") %>%
+  arrange(desc(Avg_Size))
+
+ordered_avg_data_DW$Family_Number <- factor(ordered_avg_data_DW$Family_Number, 
+                                          levels = ordered_avg_data_DW$Family_Number)
+
+#finalized largest-smallest SW and DW plots ----
+# Plot the data with the families ordered by average size
+#remove NA (larvae that did not develop in OA)
+
+ordered_avg_data_DW <- na.omit(ordered_avg_data_DW)
+View(ordered_avg_data_DW)
+
+#no colour
+ggplot(ordered_avg_data_DW, aes(x = Family_Number, y = Avg_Size)) + 
+  geom_boxplot() +
+  geom_errorbar(data = ordered_avg_data_DW, aes(x = Family_Number, ymin = Avg_Size - SD_Size, ymax = Avg_Size + SD_Size), width = 0.4, position = position_dodge(0.9)) +
+  scale_fill_manual(values = c("red")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  ylab("Average Size") +
+  xlab("Family")
+
+#add colour for treatment (red = DW)
+plot2 <- ggplot(ordered_avg_data_DW, aes(x = Family_Number, y = Avg_Size)) + 
+  geom_boxplot(fill = "white", color = "red", size = 1) + 
+  geom_errorbar(data = ordered_avg_data_DW, aes(x = Family_Number, ymin = Avg_Size - SD_Size, ymax = Avg_Size + SD_Size), width = 0.4, position = position_dodge(0.9)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        panel.grid = element_blank(),
+        plot.title = element_text(hjust = 0.5)) + 
+  ylab("Average Size") +
+  xlab("Family") +
+  ggtitle("Deep water")
+
+#Do the same for SW treatment
+
+ordered_avg_data_SW$Family_Number <- factor(ordered_avg_data_SW$Family_Number, 
+                                            levels = ordered_avg_data_SW$Family_Number)
+
+ordered_avg_data_SW <- na.omit(ordered_avg_data_SW)
+View(ordered_avg_data_SW)
+
+#no colour
+ggplot(ordered_avg_data_SW, aes(x = Family_Number, y = Avg_Size)) + 
+  geom_boxplot() +
+  geom_errorbar(data = ordered_avg_data_DW, aes(x = Family_Number, ymin = Avg_Size - SD_Size, ymax = Avg_Size + SD_Size), width = 0.4, position = position_dodge(0.9)) +
+  scale_fill_manual(values = c("red")) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+  ylab("Average Size") +
+  xlab("Family")
+
+#add colour for treatment (blue = SW) and remove gridlines
+plot1 <- ggplot(ordered_avg_data_SW, aes(x = Family_Number, y = Avg_Size)) + 
+  geom_boxplot(fill = "white", color = "blue", size = 1) + 
+  geom_errorbar(data = ordered_avg_data_SW, aes(x = Family_Number, ymin = Avg_Size - SD_Size, ymax = Avg_Size + SD_Size), width = 0.4, position = position_dodge(0.9)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        panel.grid = element_blank(),
+        plot.title = element_text(hjust = 0.5)) + 
+  ylab("Average Size") +
+  xlab("") +
+  ggtitle("Surface water")
+
+#arrange plots into a grid ----
+
+library(gridExtra)
+
+# Assuming you have two ggplot objects named plot1 and plot2
+combined_plots <- grid.arrange(plot1, plot2, ncol = 1)
+
+#PROBLEM TO FIX - can't figure out how to add a colour legend...
+
+
+#overlapping density plots ----
+
+p2 <- ggplot(data=Data, aes(x=Size, group=Treatment, fill=Treatment)) +
+  geom_density(adjust=1.5, alpha=.4) +
+  theme_ipsum()
+p2
+
+p2 <- ggplot(data=Data, aes(x=Size, group=Treatment, fill=Treatment)) +
+  geom_density(adjust=1.5, alpha=.4) +
+  theme_ipsum() +
+  scale_fill_manual(labels = c("Ambient", "OA"), values=c("blue", "red"))
+
+p2
+
+
+
+#Grouping families into R, MR, or S? ----
+
+#Ideas:
+#Based on data set - could make arbitrary size cut offs in OA - e.g., Resilient = 73-76um, moderate-resilient = 70-72um, and susceptible = 69 and below
+#however not sure how to incorporate standard deviations....or even if we need to.
+#Alternatively could use Z-score values to define R, MR, or S?
+#Could try to correlate scoring stats to size - e.g., if sizes below 70 correlate with having more deformed larvae?
+#Also should remove families that did not fertilize well in SW
+
+
+#Below, Grouping families based on R, MR, or S to use for size visuals based on avg family size
+
+
+#first average SW and DW sizes for all families
+
+avg_data <- Data %>%
+  group_by(Family_text, Treatment) %>%
+  summarise(
+    Avg_Size = mean(Size),
+    SD_Size = sd(Size),
+    .groups = 'drop'
+  )
+
+avg_data_classified <- avg_data %>%
+  mutate(Size_Category = case_when(
+    Avg_Size > 74 ~ "R",
+    between(Avg_Size, 70, 73.99) ~ "MR",
+    TRUE ~ "S"
+  ))
+
+avg_data_classified_DW <- filter(avg_data_classified, Treatment == "DW")
+
+
+ggplot(data = avg_data_classified_DW, aes(x = factor(Size_Category, levels = c("R", "MR", "S")), y = Avg_Size, fill = Size_Category)) + 
+  geom_violin() +
+  scale_fill_brewer(palette = "Spectral") +
+  theme_bw() +
+  theme(panel.grid = element_blank()) + 
+  ylab("Average Size (microns)") +
+  xlab("") +
+  guides(fill = FALSE)
+
+#make list of families classified as R, MR, or S
+
+#R
+result_R <- avg_data_classified_DW %>%
+  filter(Size_Category == "R") %>%
+  dplyr::select(Family_text) %>%
+  distinct()
+
+#MR
+result_MR <- avg_data_classified_DW %>%
+  filter(Size_Category == "MR") %>%
+  dplyr::select(Family_text) %>%
+  distinct()
+
+#S
+result_S <- avg_data_classified_DW %>%
+  filter(Size_Category == "S") %>%
+  dplyr::select(Family_text) %>%
+  distinct()
+View(result_S)
