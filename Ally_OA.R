@@ -545,6 +545,7 @@ peaks <- Data %>%
 p + geom_vline(xintercept = c(73.1, 76.1, 69.9), linetype = "dotted")
 
 
+#NOT part of Ally's project (ignore below)
 #OA selection event----
 #With Ally's size data, mimic an OA selection event
 #Will need to do more analysis to determine surviving size in OA (using scoring and Sizes) but for now, lets say 
@@ -607,4 +608,26 @@ plot <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size)) +
  plot
 
 
+ #Lets try to assess mortality rate of a given size in OA
+ #Issue = scoring does not relate to size values for each individual... so can't use scoring as 
+ #direct measurement for survival...will have to go back into samples and score and take measurements of same larva
+ 
+ #From Johnson 2022:
+ #Daily mortality rates for each family were calculated from the negative of the slope of a linear regression 
+ #relating the natural log of the proportion of fish remaining to time. 
+ #Average size of larvae within each family was measured by digitally photographing a random sample of 10–20 larvae under a microscope
 
+#look at avg larval size for scores in DW
+ 
+ avg_data_scores_DW <- Data %>%
+   filter(Treatment == "DW") %>%
+   group_by(Score) %>%
+   summarise(
+     Avg_Size = mean(Size),
+     SD_Size = sd(Size),
+     .groups = 'drop'
+   )
+ 
+ View(Data)
+ 
+ 
