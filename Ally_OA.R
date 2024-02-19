@@ -617,17 +617,70 @@ plot <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size)) +
  #relating the natural log of the proportion of fish remaining to time. 
  #Average size of larvae within each family was measured by digitally photographing a random sample of 10–20 larvae under a microscope
 
-#look at avg larval size for scores in DW
+#could look up score counts for each family in DW and then look at the family's average size in DW?
  
- avg_data_scores_DW <- Data %>%
+ str(Data)
+ Data$Family_Number <- as.character(Data$Family_Number)
+ 
+ scores_DW <- Data %>%
    filter(Treatment == "DW") %>%
-   group_by(Score) %>%
-   summarise(
-     Avg_Size = mean(Size),
-     SD_Size = sd(Size),
-     .groups = 'drop'
-   )
+   group_by(Family_Number, Score) %>%
+   summarise(number_of_scores = n())
  
  View(Data)
+ View(scores_DW)
+ 
+ # Remove NA and "S" values under Score
+ scores_DW <- scores_DW %>%
+   filter(!is.na(Score), Score != "S")
+ 
+ 
+ ggplot(scores_DW, aes(x = Family_Number, y = number_of_scores, fill = Score)) +
+   geom_bar(stat = "identity") +
+   coord_flip() +
+   labs(title = "Proportion of Different Scores for Each Family",
+        x = "Family Number",
+        y = "Proportion",
+        fill = "Score") +
+   theme(axis.text.y = element_text(size = 8))  # Change the font size as needed
+ 
+ #reorder families with highest number of "G" scores
+ 
+ ordered_family <- scores_DW %>%
+   filter(Score == "G") %>%
+   group_by(Family_Number, Score) %>%
+   arrange(desc(number_of_scores))
+ #Make G count as percentage of total count (total count = 30 observations)
+ 
+ ordered_family$number_of_scores <- (ordered_family$number_of_scores / 30) * 100
+ 
+ str(ordered_family)
+ View(ordered_family)
+ 
+ ggplot(ordered_family, aes(x = Family_Number, y = number_of_scores)) +
+   geom_bar(stat = "identity") +
+   labs(title = "Proportion of Different Scores for Each Family",
+        x = "Family Number",
+        y = "Number of G's") +
+   theme(axis.text.y = element_text(size = 8))  # Change the font size as needed
+ 
+#to order in order specified by ordered_family (highest to lowest number of G's)
+ 
+ library(forcats)
+ 
+ # Reorder the factor levels of Family_Number
+ ordered_family$Family_Number <- fct_inorder(ordered_family$Family_Number)
+
+ ggplot(data = ordered_family, aes(x = Family_Number, y = number_of_scores)) +
+   geom_bar(stat = "identity") +
+   labs(title = "Scores for Each Family",
+        x = "Family Number",
+        y = "Number of G's") +
+   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+   ylim(0, 100) +
+   theme(axis.text.x = element_text(size = 8))
+ 
+
+ 
  
  
