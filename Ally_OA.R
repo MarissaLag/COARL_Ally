@@ -680,7 +680,66 @@ plot <- ggplot(data = subset(Data, Treatment == "DW"), aes(x = Size)) +
    ylim(0, 100) +
    theme(axis.text.x = element_text(size = 8))
  
+#get avergage size in SW and DW
+ 
+ avg_data <- Data %>%
+   group_by(Treatment) %>%
+   summarise(
+     Avg_Size = mean(Size, na.rm = TRUE),
+     SD_Size = sd(Size, na.rm = TRUE),
+     .groups = 'drop'
+   )
+ 
+ View(avg_data)
+ 
+#get % difference
+ DW_avg <- avg_data$Avg_Size[avg_data$Treatment == "DW"]
+ SW_avg <- avg_data$Avg_Size[avg_data$Treatment == "SW"]
+ 
+ change <- SW_avg - DW_avg
+ averages <- (SW_avg + DW_avg)/2
+ 
+ percent_difference <- change/averages *100
 
- 
- 
- 
+print(percent_difference) #4.155% difference between DW and SW average size
+
+#Based off Bitter et al., 2019, size differences will disappear
+#What size "cut-off" will make the DW mean the same as the SW mean?
+
+#Plot histogram of DW and SW
+
+p2 <- ggplot(data=final_filtered_data, aes(x=Size, group=Treatment, fill=Treatment)) +
+  geom_density(adjust=1.5, alpha=.4) +
+  theme_ipsum() +
+  scale_fill_manual(labels = c("Ambient", "OA"), values=c("blue", "red"))
+
+p2
+
+#filter values smaller than 72.32um and check the mean of DW
+filtered_data <- dplyr::filter(Data, Size >= 73.5)
+View(filtered_data)
+
+filtered_data_DW <- dplyr::filter(Data, Size >= 72.32, Treatment == "DW")
+filtered_data_SW <- dplyr::filter(Data, Treatment == "SW")
+
+final_filtered_data <- rbind(filtered_data_DW, filtered_data_SW)
+
+View(filtered_data_SW)
+
+avg_data <- final_filtered_data %>%
+  group_by(Treatment) %>%
+  summarise(
+    Avg_Size = mean(Size, na.rm = TRUE),
+    SD_Size = sd(Size, na.rm = TRUE),
+    .groups = 'drop'
+  )
+
+View(avg_data)
+
+#In order for DW and SW averages to equal the same, all sizes below 72.32 must be filtered out from DW
+#Paper by Bitter et al., 2019 proposed all slow-growing larvae will diminish over time until mean avg size of 
+#ambient and OA is the same by the end of larval rearing
+#eventually, may want to text this empirically (e.g., rear larvae in OA conditions and measure avg size overtime and compare to control)
+
+
+
