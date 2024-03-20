@@ -736,10 +736,20 @@ avg_data <- final_filtered_data %>%
 
 View(avg_data)
 
+
+sample_data <- rnorm(10000, mean = 63.8)
+mean <- mean(sample_data)
+
+
+# Plot a histogram
+hist(sample_data, breaks = 10, col = "lightblue", main = "", xlab = "Values")
+
+
+
 #In order for DW and SW averages to equal the same, all sizes below 72.32 must be filtered out from DW
 #Paper by Bitter et al., 2019 proposed all slow-growing larvae will diminish over time until mean avg size of 
 #ambient and OA is the same by the end of larval rearing
-#eventually, may want to text this empirically (e.g., rear larvae in OA conditions and measure avg size overtime and compare to control)
+#eventually, may want to test this empirically (e.g., rear larvae in OA conditions and measure avg size overtime and compare to control)
 
 
 
